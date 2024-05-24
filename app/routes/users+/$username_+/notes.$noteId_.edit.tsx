@@ -87,9 +87,9 @@ export async function action({ params, request }: DataFunctionArgs) {
     return redirect(`/users/${params.username}/notes/${params.noteId}`)
 }
 
-function ErrorList({ errors }: { errors?: Array<string> | null }) {
+function ErrorList({ errors, id }: { errors?: Array<string> | null, id?: string }) {
     return errors?.length ? (
-        <ul className='flex flex-col gap-1'>
+        <ul className='flex flex-col gap-1' id={id}>
             {errors.map((error, i) => (
                 <li key={i} className='text-[10px] text-red-500'>
                     {error}
@@ -118,6 +118,15 @@ export default function NoteEdit() {
 
     const isHydrated = useHydrate()
 
+    const formHasErrors = Boolean(formErrors?.length);
+    const formErrorId = formHasErrors ? 'form-error' : undefined
+
+    const titleHasErrors = Boolean(fieldErrors?.title?.length);
+    const titleErrorId = titleHasErrors ? 'title-error' : undefined
+
+    const contentHasErrors = Boolean(fieldErrors?.content?.length);
+    const contentErrorId = contentHasErrors ? 'content-error' : undefined
+
     return (
         <div className="absolute inset-0">
             <Form
@@ -125,22 +134,24 @@ export default function NoteEdit() {
                 method="POST"
                 className="flex h-full flex-col gap-y-4 overflow-x-hidden px-10 pb-28 pt-12"
                 noValidate={isHydrated}
+                aria-invalid={formHasErrors || undefined}
+                aria-describedby={formErrorId}
             >
                 <div className='flex flex-col gap-1'>
                     <div>
                         {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
                         <Label htmlFor={titleId}>Title</Label>
-                        <Input id={titleId} name="title" defaultValue={data.note.title} required maxLength={titleMaxLength}/>
+                        <Input id={titleId} name="title" defaultValue={data.note.title} required maxLength={titleMaxLength} aria-invalid={titleHasErrors || undefined} aria-describedby={titleErrorId}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
-                            <ErrorList errors={fieldErrors?.title}/>
+                            <ErrorList id={titleErrorId} errors={fieldErrors?.title}/>
                         </div>
                     </div>
                     <div>
                         {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
                         <Label htmlFor='content-input'>Content</Label>
-                        <TextArea id='content-input' name="content" defaultValue={data.note.content} required maxLength={contentMaxLength}/>
+                        <TextArea id='content-input' name="content" defaultValue={data.note.content} required maxLength={contentMaxLength} aria-invalid={contentHasErrors || undefined} aria-describedby={contentErrorId}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
-                            <ErrorList errors={fieldErrors?.content}/>
+                            <ErrorList id={contentErrorId} errors={fieldErrors?.content}/>
                         </div>
                     </div>
                 </div>
