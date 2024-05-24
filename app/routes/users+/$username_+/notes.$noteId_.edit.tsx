@@ -1,6 +1,6 @@
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, useActionData } from '@remix-run/react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useState, useRef } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.js'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -111,6 +111,7 @@ export default function NoteEdit() {
     const actionData = useActionData<typeof action>()
     const isSubmitting = useIsSubmitting();
     const formId = 'note-editor';
+    const formRef = useRef<HTMLInputElement>(null)
     const titleId = useId();
 
 	const fieldErrors = actionData?.status === 'error' ? actionData.errors.fieldErrors : null
@@ -127,6 +128,24 @@ export default function NoteEdit() {
     const contentHasErrors = Boolean(fieldErrors?.content?.length);
     const contentErrorId = contentHasErrors ? 'content-error' : undefined
 
+    useEffect(() => {
+        const formEl = formRef.current
+
+        if(!formEl) return
+        if(actionData?.status !== 'error') return
+
+        if(formEl.matches('[aria-invalid="true"]')) {
+            formEl.focus()
+        } else {
+            const firstInvalidField = formEl.querySelector('[aria-invalid="true"]')
+
+            if (firstInvalidField instanceof HTMLElement) {
+                firstInvalidField.focus()
+            }
+        }
+
+    }, [actionData])
+
     return (
         <div className="absolute inset-0">
             <Form
@@ -139,15 +158,13 @@ export default function NoteEdit() {
             >
                 <div className='flex flex-col gap-1'>
                     <div>
-                        {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
                         <Label htmlFor={titleId}>Title</Label>
-                        <Input id={titleId} name="title" defaultValue={data.note.title} required maxLength={titleMaxLength} aria-invalid={titleHasErrors || undefined} aria-describedby={titleErrorId}/>
+                        <Input id={titleId} name="title" ref={formRef} defaultValue={data.note.title} required maxLength={titleMaxLength} aria-invalid={titleHasErrors || undefined} aria-describedby={titleErrorId} autoFocus/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
                             <ErrorList id={titleErrorId} errors={fieldErrors?.title}/>
                         </div>
                     </div>
                     <div>
-                        {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
                         <Label htmlFor='content-input'>Content</Label>
                         <TextArea id='content-input' name="content" defaultValue={data.note.content} required maxLength={contentMaxLength} aria-invalid={contentHasErrors || undefined} aria-describedby={contentErrorId}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
