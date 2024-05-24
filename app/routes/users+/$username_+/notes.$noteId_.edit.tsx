@@ -1,5 +1,6 @@
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
-import { Form, useLoaderData, useNavigation, useFormAction, useActionData } from '@remix-run/react'
+import { Form, useLoaderData, useActionData } from '@remix-run/react'
+import { useEffect, useState } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.js'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -8,7 +9,7 @@ import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.js'
 import { TextArea } from '#app/components/ui/textarea.tsx'
 import { db } from '#app/utils/db.server.ts'
-import { invariantResponse } from '#app/utils/misc.tsx'
+import { invariantResponse, useIsSubmitting } from '#app/utils/misc.tsx'
 
 export async function loader({ params }: DataFunctionArgs) {
     const note = db.note.findFirst({
@@ -26,26 +27,35 @@ export async function loader({ params }: DataFunctionArgs) {
     })
 }
 
+type ActionErrors = {
+	formErrors: Array<string>
+	fieldErrors: {
+		title: Array<string>
+		content: Array<string>
+	}
+}
+
 const titleMaxLength = 1000
 const contentMaxLength = 10000
 
 // aksi yang dikirimkan form
 export async function action({ params, request }: DataFunctionArgs) {
+    invariantResponse(params.noteId, 'noteId param is required!')
+    
     const formData = await request.formData();
-
     const title = formData.get('title');
     const content = formData.get('content');
 
     invariantResponse(typeof title === 'string', 'title is required', { status: 400 })
     invariantResponse(typeof content === 'string', 'content is required', { status: 400 })
 
-    const errors = {
-        formErrors: [] as Array<string>,
-        fieldErrors: {
-            title: [] as Array<string>,
-            content: [] as Array<string>,
-        }
-    }
+    const errors: ActionErrors = {
+		formErrors: [],
+		fieldErrors: {
+			title: [],
+			content: [],
+		},
+	}
 
     if(title === '') {
         errors.fieldErrors.title.push('Title is Required');
@@ -66,9 +76,7 @@ export async function action({ params, request }: DataFunctionArgs) {
     const hasErrors = errors.formErrors.length > 0 || Object.values(errors.fieldErrors).some(fieldErrors => fieldErrors.length > 0)
 
     if(hasErrors) {
-        return json({ errors }, {
-            status: 400
-        })
+        return json({ status: 'error', errors } as const, { status: 400 })
     }
 
     db.note.update({
@@ -91,54 +99,66 @@ function ErrorList({ errors }: { errors?: Array<string> | null }) {
     ) : null
 }
 
+function useHydrate() {
+    const [hydrated, setHydrated] = useState(false);
+
+    useEffect(() => setHydrated(true), [])
+    return hydrated
+}
+
 export default function NoteEdit() {
     const data = useLoaderData<typeof loader>()
     const actionData = useActionData<typeof action>()
-    const navigation = useNavigation();
-    const formAction = useFormAction();
-    const isSubmitting = navigation.state !== 'idle' && navigation.formMethod === 'POST' && navigation.formAction === formAction
+    const isSubmitting = useIsSubmitting();
+    const formId = 'note-editor';
 
-    const fieldErrors = actionData?.status === 'error' ? actionData.errors.fieldErrors : null
-    const formErrors = actionData?.errors?.formErrors ?? null
+	const fieldErrors = actionData?.status === 'error' ? actionData.errors.fieldErrors : null
+	const formErrors = actionData?.status === 'error' ? actionData.errors.formErrors : null
+
+    const isHydrated = useHydrate()
 
     return (
-        <Form
-            method="POST"
-            className="flex h-full flex-col gap-y-4 overflow-x-hidden px-10 pb-28 pt-12"
-            noValidate
-        >
-            <div className='flex flex-col gap-1'>
-                <div>
-                    {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
-                    <Label>Title</Label>
-                    <Input name="title" defaultValue={data.note.title} required maxLength={titleMaxLength}/>
-                    <div className="min-h-[32px] px-4 pb-3 pt-1">
-                        <ErrorList errors={fieldErrors?.title}/>
+        <div className="absolute inset-0">
+            <Form
+                id={formId}
+                method="POST"
+                className="flex h-full flex-col gap-y-4 overflow-x-hidden px-10 pb-28 pt-12"
+                noValidate={isHydrated}
+            >
+                <div className='flex flex-col gap-1'>
+                    <div>
+                        {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
+                        <Label>Title</Label>
+                        <Input name="title" defaultValue={data.note.title} required maxLength={titleMaxLength}/>
+                        <div className="min-h-[32px] px-4 pb-3 pt-1">
+                            <ErrorList errors={fieldErrors?.title}/>
+                        </div>
+                    </div>
+                    <div>
+                        {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
+                        <Label>Content</Label>
+                        <TextArea name="content" defaultValue={data.note.content} required maxLength={contentMaxLength}/>
+                        <div className="min-h-[32px] px-4 pb-3 pt-1">
+                            <ErrorList errors={fieldErrors?.content}/>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
-                    <Label>Content</Label>
-                    <TextArea name="content" defaultValue={data.note.content} required maxLength={contentMaxLength}/>
-                    <div className="min-h-[32px] px-4 pb-3 pt-1">
-                        <ErrorList errors={fieldErrors?.content}/>
-                    </div>
+                <div className='min-h-[32px] px-4 pb-3 pt-1'>
+                    <ErrorList errors={formErrors}/>
                 </div>
-            </div>
-            <div className='min-h-[32px] px-4 pb-3 pt-1'>
-                <ErrorList errors={formErrors}/>
-            </div>
-            <div className={floatingToolbarClassName}>
-                <Button variant="destructive" type="reset">
-                    Reset
-                </Button>
-                <StatusButton
-                    type="submit"
-                    disabled={isSubmitting}
-                    status={isSubmitting ? 'pending' : 'idle'}
-                >Submit</StatusButton>
-            </div>
-        </Form>
+                <div className={floatingToolbarClassName}>
+                    <Button variant="destructive" type="reset">
+                        Reset
+                    </Button>
+                    <StatusButton
+                        form={formId}
+                        type="submit"
+                        disabled={isSubmitting}
+                        status={isSubmitting ? 'pending' : 'idle'}
+                    >Submit</StatusButton>
+                </div>
+            </Form>
+        </div>
     )
 }
 
