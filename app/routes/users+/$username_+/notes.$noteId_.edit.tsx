@@ -1,6 +1,6 @@
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, useActionData } from '@remix-run/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.js'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
@@ -111,6 +111,7 @@ export default function NoteEdit() {
     const actionData = useActionData<typeof action>()
     const isSubmitting = useIsSubmitting();
     const formId = 'note-editor';
+    const titleId = useId();
 
 	const fieldErrors = actionData?.status === 'error' ? actionData.errors.fieldErrors : null
 	const formErrors = actionData?.status === 'error' ? actionData.errors.formErrors : null
@@ -128,16 +129,16 @@ export default function NoteEdit() {
                 <div className='flex flex-col gap-1'>
                     <div>
                         {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
-                        <Label>Title</Label>
-                        <Input name="title" defaultValue={data.note.title} required maxLength={titleMaxLength}/>
+                        <Label htmlFor={titleId}>Title</Label>
+                        <Input id={titleId} name="title" defaultValue={data.note.title} required maxLength={titleMaxLength}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
                             <ErrorList errors={fieldErrors?.title}/>
                         </div>
                     </div>
                     <div>
                         {/* 🦉 NOTE: this is not an accessible label, we'll get to that in the accessibility exercises */}
-                        <Label>Content</Label>
-                        <TextArea name="content" defaultValue={data.note.content} required maxLength={contentMaxLength}/>
+                        <Label htmlFor='content-input'>Content</Label>
+                        <TextArea id='content-input' name="content" defaultValue={data.note.content} required maxLength={contentMaxLength}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
                             <ErrorList errors={fieldErrors?.content}/>
                         </div>
@@ -147,7 +148,7 @@ export default function NoteEdit() {
                     <ErrorList errors={formErrors}/>
                 </div>
                 <div className={floatingToolbarClassName}>
-                    <Button variant="destructive" type="reset">
+                    <Button variant="destructive" type="reset" form={formId}>
                         Reset
                     </Button>
                     <StatusButton
