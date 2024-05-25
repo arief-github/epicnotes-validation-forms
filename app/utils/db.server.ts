@@ -3,11 +3,21 @@
  * for the purposes of our workshop. The data modeling workshop will cover
  * the proper database.
  */
-import crypto from 'crypto'
+import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { factory, manyOf, nullable, oneOf, primaryKey } from '@mswjs/data'
 import { singleton } from './singleton.server.ts'
 
 const getId = () => crypto.randomBytes(16).toString('hex').slice(0, 8)
+
+type UpdateNoteType = {
+    id: string,
+    title: string,
+    content: string,
+    images?: Array<{ id?: string, file?: File, altText: string } | null>
+}
 
 export const db = singleton('db', () => {
     const db = factory({
@@ -29,7 +39,14 @@ export const db = singleton('db', () => {
             createdAt: () => new Date(),
 
             owner: oneOf('user'),
+            images: manyOf('image')
         },
+        image: {
+            id: primaryKey(getId),
+            filePath: String,
+            contentType: String,
+            altText: nullable(String)
+        }
     })
 
     const kody = db.user.create({
@@ -124,3 +141,64 @@ export const db = singleton('db', () => {
 
     return db
 })
+
+export async function updateNote({
+    id,
+    title,
+    content,
+    images
+}: UpdateNoteType) {
+    const noteImagePromises = images?.map(async image => {
+        if (!image) return null
+
+        if (image.id) {
+            const hasReplacement = (image?.file?.size || 0) > 0;
+            const filePath = image.file && hasReplacement ? await writeImage(image.file) : undefined
+
+            const id = image.file && hasReplacement ? getId() : image.id
+
+            return db.image.update({
+                where: { id: { equals: image.id }},
+                data: {
+                    id,
+                    filePath,
+                    altText: image.altText
+                }
+            })
+        } else if (image.file) {
+            if (image.file.size < 1) return null
+
+            const filePath = await writeImage(image.file)
+
+            return db.image.create({
+                altText: image.altText,
+                filePath,
+                contentType: image.file.type
+            })
+        } else {
+            return null
+        }
+    }) ?? []
+
+    const noteImages = await Promise.all(noteImagePromises)
+
+    db.note.update({
+        where: { id: { equals: id } },
+        data: {
+            title,
+            content,
+            images: noteImages.filter(Boolean)
+        }
+    })
+}
+
+async function writeImage(image: File) {
+    const tmpDir = path.join(os.tmpdir(), 'epic-web', 'images')
+    await fs.mkdir(tmpDir, { recursive: true })
+
+    const timestamp = Date.now()
+    const filePath = path.join(tmpDir, `${timestamp}.${image.name}`)
+
+    await fs.writeFile(filePath, Buffer.from(await image.arrayBuffer()))
+    return filePath
+}
