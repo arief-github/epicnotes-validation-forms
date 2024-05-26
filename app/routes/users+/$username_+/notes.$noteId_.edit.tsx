@@ -1,3 +1,4 @@
+import { parse } from '@conform-to/zod'
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, useActionData } from '@remix-run/react'
 import { useEffect, useId, useState, useRef } from 'react'
@@ -42,16 +43,15 @@ export async function action({ params, request }: DataFunctionArgs) {
     
     const formData = await request.formData();
 
-    const result = NoteEditorSchema.safeParse({
-        title: formData.get('title'),
-        content: formData.get('content')
-    })
+    const submission = parse(formData, {
+        schema: NoteEditorSchema
+    });
 
-    if(!result.success) {
-        return json({ status: 'error', errors: result.error.flatten() } as const, { status: 400 })
+    if(!submission.value) {
+        return json({ status: 'error', submission } as const, { status: 400 })
     }
 
-    const { title, content } = result.data
+    const { title, content } = submission.value
     await updateNote({ id: params.noteId, title, content })
 
 
@@ -85,8 +85,8 @@ export default function NoteEdit() {
     const formRef = useRef<HTMLFormElement>(null)
     const titleId = useId();
 
-	const fieldErrors = actionData?.status === 'error' ? actionData.errors.fieldErrors : null
-	const formErrors = actionData?.status === 'error' ? actionData.errors.formErrors : null
+	const fieldErrors = actionData?.status === 'error' ? actionData.submission.error : null
+	const formErrors = actionData?.status === 'error' ? actionData.submission.error[''] : null
 
     const isHydrated = useHydrate()
 
