@@ -1,7 +1,7 @@
-import { parse } from '@conform-to/zod'
+import { conform, useForm } from '@conform-to/react'
+import { parse, getFieldsetConstraint } from '@conform-to/zod'
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
 import { Form, useLoaderData, useActionData } from '@remix-run/react'
-import { useEffect, useId, useState, useRef } from 'react'
 import { z } from 'zod'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.js'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
@@ -11,7 +11,7 @@ import { Label } from '#app/components/ui/label.tsx'
 import { StatusButton } from '#app/components/ui/status-button.js'
 import { TextArea } from '#app/components/ui/textarea.tsx'
 import { db, updateNote } from '#app/utils/db.server.ts'
-import { invariantResponse, useIsSubmitting, useFocusInvalid } from '#app/utils/misc.tsx'
+import { invariantResponse, useIsSubmitting } from '#app/utils/misc.tsx'
 
 export async function loader({ params }: DataFunctionArgs) {
     const note = db.note.findFirst({
@@ -70,76 +70,63 @@ function ErrorList({ errors, id }: { errors?: Array<string> | null, id?: string 
     ) : null
 }
 
-function useHydrate() {
-    const [hydrated, setHydrated] = useState(false);
-
-    useEffect(() => setHydrated(true), [])
-    return hydrated
-}
-
 export default function NoteEdit() {
     const data = useLoaderData<typeof loader>()
     const actionData = useActionData<typeof action>()
     const isSubmitting = useIsSubmitting();
-    const formId = 'note-editor';
-    const formRef = useRef<HTMLFormElement>(null)
-    const titleId = useId();
 
-	const fieldErrors = actionData?.status === 'error' ? actionData.submission.error : null
-	const formErrors = actionData?.status === 'error' ? actionData.submission.error[''] : null
+    const [form, fields] = useForm({
+        id: 'note-editor',
+        constraint: getFieldsetConstraint(NoteEditorSchema),
+        lastSubmission: actionData?.submission,
+        onValidate({ formData }) {
+            return parse(formData, { schema: NoteEditorSchema })
+        },
+        defaultValue: {
+            title: data.note.title,
+            content: data.note.content
+        }
+    })
 
-    const isHydrated = useHydrate()
-
-    const formHasErrors = Boolean(formErrors?.length);
-    const formErrorId = formHasErrors ? 'form-error' : undefined
-
-    const titleHasErrors = Boolean(fieldErrors?.title?.length);
-    const titleErrorId = titleHasErrors ? 'title-error' : undefined
-
-    const contentHasErrors = Boolean(fieldErrors?.content?.length);
-    const contentErrorId = contentHasErrors ? 'content-error' : undefined
-
-    useFocusInvalid(
-        formRef.current,
-        actionData?.status === 'error' && !isSubmitting
-    );
 
     return (
         <div className="absolute inset-0">
             <Form
-                id={formId}
                 method="POST"
                 className="flex h-full flex-col gap-y-4 overflow-x-hidden px-10 pb-28 pt-12"
-                noValidate={isHydrated}
-                aria-invalid={formHasErrors || undefined}
-                aria-describedby={formErrorId}
-                ref={formRef}
+                {...form.props}
             >
                 <div className='flex flex-col gap-1'>
                     <div>
-                        <Label htmlFor={titleId}>Title</Label>
-                        <Input id={titleId} name="title" defaultValue={data.note.title} required maxLength={titleMaxLength} aria-invalid={titleHasErrors || undefined} aria-describedby={titleErrorId} autoFocus/>
+                        <Label htmlFor={fields.title.id}>Title</Label>
+                        <Input autoFocus {...conform.input(fields.title)}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
-                            <ErrorList id={titleErrorId} errors={fieldErrors?.title}/>
+                            	<ErrorList
+								    id={fields.title.errorId}
+								    errors={fields.title.errors}
+							    />
                         </div>
                     </div>
                     <div>
-                        <Label htmlFor='content-input'>Content</Label>
-                        <TextArea id='content-input' name="content" defaultValue={data.note.content} required maxLength={contentMaxLength} aria-invalid={contentHasErrors || undefined} aria-describedby={contentErrorId}/>
+                        <Label htmlFor={fields.content.id}>Content</Label>
+                        <TextArea {...conform.textarea(fields.content)}/>
                         <div className="min-h-[32px] px-4 pb-3 pt-1">
-                            <ErrorList id={contentErrorId} errors={fieldErrors?.content}/>
+                            <ErrorList
+								id={fields.content.errorId}
+								errors={fields.content.errors}
+							/>
                         </div>
                     </div>
                 </div>
                 <div className='min-h-[32px] px-4 pb-3 pt-1'>
-                    <ErrorList errors={formErrors}/>
+                    <ErrorList id={form.errorId} errors={form.errors} />
                 </div>
                 <div className={floatingToolbarClassName}>
-                    <Button variant="destructive" type="reset" form={formId}>
+                    <Button variant="destructive" type="reset" form={form.id}>
                         Reset
                     </Button>
                     <StatusButton
-                        form={formId}
+                        form={form.id}
                         type="submit"
                         disabled={isSubmitting}
                         status={isSubmitting ? 'pending' : 'idle'}
