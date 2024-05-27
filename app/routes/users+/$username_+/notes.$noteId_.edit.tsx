@@ -37,10 +37,17 @@ export async function loader({ params }: DataFunctionArgs) {
 const titleMaxLength = 1000
 const contentMaxLength = 10000
 const MAX_UPLOAD_SIZE = 1024 * 1024 * 3 // 3mb
-
 const NoteEditorSchema = z.object({
-    title: z.string().min(1).max(titleMaxLength),
-    content: z.string().min(1).max(contentMaxLength)
+	title: z.string().max(titleMaxLength),
+	content: z.string().max(contentMaxLength),
+	imageId: z.string().optional(),
+	file: z
+		.instanceof(File)
+		.refine(file => {
+			return file.size <= MAX_UPLOAD_SIZE
+		}, 'File size must be less than 3MB')
+		.optional(),
+	altText: z.string().optional(),
 })
 
 // aksi yang dikirimkan form
@@ -57,17 +64,14 @@ export async function action({ params, request }: DataFunctionArgs) {
         return json({ status: 'error', submission } as const, { status: 400 })
     }
 
-    const { title, content } = submission.value
-    await updateNote({ id: params.noteId, title, content, images: [
-        { 
-            // @ts-expect-error 🦺 we'll fix this in the next exercise
-				id: formData.get('imageId'),
-				// @ts-expect-error 🦺 we'll fix this in the next exercise
-				file: formData.get('file'),
-				// @ts-expect-error 🦺 we'll fix this in the next exercise
-				altText: formData.get('altText'),
-        }
-    ]})
+    const { title, content, file, imageId, altText } = submission.value
+
+	await updateNote({
+		id: params.noteId,
+		title,
+		content,
+		images: [{ file, id: imageId, altText }],
+	})
 
     return redirect(`/users/${params.username}/notes/${params.noteId}`)
 }

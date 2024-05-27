@@ -16,7 +16,7 @@ type UpdateNoteType = {
     id: string,
     title: string,
     content: string,
-    images?: Array<{ id?: string, file?: File, altText: string } | null>
+    images?: Array<{ id?: string, file?: File, altText?: string } | null>
 }
 
 export const db = singleton('db', () => {
