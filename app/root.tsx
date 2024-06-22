@@ -1,6 +1,6 @@
 import os from 'node:os'
 import { cssBundleHref } from '@remix-run/css-bundle'
-import { json, type LinksFunction } from '@remix-run/node'
+import { type DataFunctionArgs, json, type LinksFunction } from '@remix-run/node'
 import {
 	Link,
 	Links,
@@ -12,14 +12,15 @@ import {
 	Meta,
 	type MetaFunction
 } from '@remix-run/react'
+import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import faviconAssetUrl from './assets/favicon.svg'
 import { GeneralErrorBoundary } from './components/error-boundary.tsx'
 import { EpicShop } from './epicshop.tsx'
 import fontStylesheetUrl from './styles/font.css'
 import tailwindStylesheetUrl from './styles/tailwind.css'
+import { csrf } from './utils/csrf.server.ts'
 import { getEnv } from './utils/env.server.ts'
 
-import { HoneypotProvider } from 'remix-utils/honeypot/react'
 import { honeypot } from './utils/honeypot.server.ts'
 
 export const links: LinksFunction = () => {
@@ -31,10 +32,11 @@ export const links: LinksFunction = () => {
 	].filter(Boolean)
 }
 
-export async function loader() {
+export async function loader({ request }: DataFunctionArgs) {
 	const honeyProps = honeypot.getInputProps()
+	const [csrfToken, csrfCookieHeader] = await csrf.commitToken(request)
 
-	return json({ username: os.userInfo().username, ENV: getEnv(), honeyProps })
+	return json({ username: os.userInfo().username, ENV: getEnv(), honeyProps, csrfToken }, { headers: csrfCookieHeader ? { 'set-cookie': csrfCookieHeader } : {} })
 }
 
 function Document({ children }: { children: React.ReactNode }) {
