@@ -5,7 +5,7 @@ if (
 	process.env.NODE_ENV !== 'production' ||
 	process.env.PLAYWRIGHT_TEST_BASE_URL
 ) {
-	process.env.TESTING = true
+	process.env.TESTING = 'true'
 }
 
 if (process.env.NODE_ENV === 'production') {

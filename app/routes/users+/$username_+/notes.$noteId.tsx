@@ -1,10 +1,14 @@
 import { json, redirect, type DataFunctionArgs } from '@remix-run/node'
-import { Form, Link, useLoaderData } from '@remix-run/react'
+import { Form, Link, useLoaderData, type MetaFunction } from '@remix-run/react'
+import { AuthenticityTokenInput } from 'remix-utils/csrf/react'
+import { CSRFError } from 'remix-utils/csrf/server'
 import { GeneralErrorBoundary } from '#app/components/error-boundary.js'
 import { floatingToolbarClassName } from '#app/components/floating-toolbar.tsx'
 import { Button } from '#app/components/ui/button.tsx'
+import { csrf } from '#app/utils/csrf.server.js'
 import { db } from '#app/utils/db.server.ts'
 import { invariantResponse } from '#app/utils/misc.tsx'
+import { type loader as notesLoader } from './notes.tsx'
 
 export async function loader({ params }: DataFunctionArgs) {
     const note = db.note.findFirst({
@@ -23,10 +27,23 @@ export async function loader({ params }: DataFunctionArgs) {
 }
 
 export async function action({ request, params }: DataFunctionArgs) {
+    invariantResponse(params.noteId, 'noteId params is required')
+    
     const formData = await request.formData();
-    const deleteAction = formData.get('deleteAction');
+    
+    try {
+        await csrf.validate(formData, request.headers)
+    } catch (error) {
+        if (error instanceof CSRFError ) {
+            throw new Response('Invalid CSRF Token', { status: 403 })
+        }
 
-    invariantResponse(deleteAction === 'delete', 'invalid action', { status: 400 });
+        throw error
+    }
+
+    const intent = formData.get('intent')
+
+    invariantResponse(intent === 'delete', 'Invalid intent');
 
     db.note.delete({
         where: {
@@ -63,6 +80,7 @@ export default function NoteRoute() {
             </div>
             <div className={floatingToolbarClassName}>
                 <Form method='POST'>
+                    <AuthenticityTokenInput/>
                     <Button
                         type='submit'
                         variant='destructive'
@@ -78,6 +96,28 @@ export default function NoteRoute() {
             </div>
         </div>
     )
+}
+
+export const meta: MetaFunction<
+	typeof loader,
+	{ 'routes/users+/$username_+/notes': typeof notesLoader }
+> = ({ data, params, matches }) => {
+	const notesMatch = matches.find(
+		m => m.id === 'routes/users+/$username_+/notes',
+	)
+	const displayName = notesMatch?.data?.owner.name ?? params.username
+	const noteTitle = data?.note.title ?? 'Note'
+	const noteContentsSummary =
+		data && data.note.content.length > 100
+			? data?.note.content.slice(0, 97) + '...'
+			: 'No content'
+	return [
+		{ title: `${noteTitle} | ${displayName}'s Notes | Epic Notes` },
+		{
+			name: 'description',
+			content: noteContentsSummary,
+		},
+	]
 }
 
 export function ErrorBoundary() {
