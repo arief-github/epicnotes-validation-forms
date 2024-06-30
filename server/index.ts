@@ -73,16 +73,38 @@ morgan.token('url', req => decodeURIComponent(req.url ?? ''))
 app.use(morgan('tiny'))
 
 const minimumRateLimit = 5;
-// const limitMultiple = process.env.TESTING ? 10_000 : 1
+const limitMultiple = process.env.TESTING ? 10_000 : 1
 
-app.use(
-	rateLimit({
-		windowMs: 60 * 1000,
-		limit: minimumRateLimit,
-		standardHeaders: true,
-		legacyHeaders: false,
-	})
-)
+const rateLimitDefault = {
+	windowMs: 60 * 1000,
+	limit: minimumRateLimit,
+	standardHeaders: true,
+	legacyHeaders: false,
+}
+
+const strongestRateLimit = rateLimit({
+	...rateLimitDefault,
+	limit: 10 * limitMultiple
+})
+
+const strongRateLimit = rateLimit({
+	...rateLimitDefault,
+	limit: 100 * limitMultiple
+})
+
+const generalRateLimit = rateLimit(rateLimitDefault);
+
+app.use((req, res, next) => {
+	const strongPaths = ['/signup']
+	if (req.method !== 'GET' && req.method !== 'HEAD') {
+		if (strongPaths.some(p => req.path.includes(p))) {
+			return strongestRateLimit(req, res, next)
+		}
+		return strongRateLimit(req, res, next)
+	}
+
+	return generalRateLimit(req, res, next)
+})
 
 app.use((_, res, next) => {
 	res.locals.cspNonce = crypto.randomBytes(16).toString('hex')
